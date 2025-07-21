@@ -238,7 +238,7 @@ async function mergeImages(selected1, selected2) {
         }
 
         console.log("emptyBonds after spliced: " + emptyBonds)
-        // console.log("addHMol: " + addHMol)
+        console.log("addHMol: " + addHMol)
 
         const finalMol = RDKit.get_mol(addHMol);
         /// - Convert mol to smile
@@ -260,7 +260,7 @@ async function mergeImages(selected1, selected2) {
     const mergedMol = RDKit.get_mol(mergedString);
     const mergedSvg = mergedMol.get_svg().replace(
         "<svg",
-        `<svg data-smiles="${smileData}"`
+        `<svg class="merged-svg" data-smiles="${smileData}"`
     );
     let canvas = document.querySelector("#frag-canvas")
     canvas.innerHTML += mergedSvg;
@@ -479,11 +479,6 @@ async function displayTextWhenHovered(hoveredEl, mode, molecule, textBoxEl) {
         textBoxEl.innerText = peak.description;
     }
 }
-
-function removeTextWhenMoveout(textBoxEl) {
-    textBoxEl.innerText = "";
-}
-
 
 ///////////////////////
 /// UNUSED FUNCTION ///

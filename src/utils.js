@@ -411,3 +411,33 @@ function getEmptyBondIndex(molblock) {
     return emptyBond;
 }
 
+function replaceAtomByIndex(molfile, index, newAtom) {
+    // Split MOL file into lines
+    let lines = molfile.split('\n');
+
+    // Atom and bond counts are on line 4 (index 3)
+    let countsLine = lines[3];
+    let atomCount = parseInt(countsLine.substring(0, 3));
+
+    // Validate index
+    if (index < 1 || index > atomCount) {
+        console.error(`Invalid atom index: ${index}`);
+        return molfile;
+    }
+
+    // Atom block starts at line 4
+    let atomLineIndex = 4 + (index - 1);
+    let atomLine = lines[atomLineIndex];
+
+    // Replace the atom symbol (columns 31–34)
+    let newLine = atomLine.substring(0, 31) + newAtom.padEnd(3, ' ') + atomLine.substring(34);
+    lines[atomLineIndex] = newLine;
+
+    // Return modified MOL file
+    return lines.join('\n');
+}
+
+
+function removeTextWhenMoveout(textBoxEl) {
+    textBoxEl.innerText = "";
+}

@@ -401,6 +401,24 @@ body::-webkit-scrollbar, .spec-desc::-webkit-scrollbar {
 .dropdown:hover .dropbtn {background-color: #3e8e41;}
 
 svg {
-    /* width: 20%; */
     padding: 3%;
+}
+
+.frag-table svg {
+    width: 10%;
+    height: 15%;
+}
+
+#frag-canvas svg {
+    width: 13%;
+    height: 27%;
+}
+
+.merged-svg {
+    width: 30% !important; 
+}
+
+#frag-8 {
+    height: 30%;
+    width: 30%;
 }
