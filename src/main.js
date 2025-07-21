@@ -77,7 +77,7 @@ let editMode = false;
 function loadFragmentTable() {
     let fragTable = document.querySelector(".frag-table")
     for (let i = 0; i < 9; i++) {
-        fetch("data/frag-library/frag" + i + ".svg")
+        fetch(`data/frag-library/frag${i}.svg`)
         .then(response => {
             if (!response.ok) {
                 throw new Error("Failed to load: " + response.status);
@@ -423,6 +423,7 @@ async function createCompoundSubmenu(menuFilePath) {
 
                 console.log(`Selected compound: ${compoundName}`);
                 displayingMol = compoundName;
+                viewingMode = "MS"
 
                 canvases = setUpCanvas(
                     `data/spectra/MS/${compoundName}MS.jdx`,
@@ -463,7 +464,7 @@ async function displayGeneralText(molecule, mode = "", textBoxEl = SPEC_DESCRIPT
 
 async function displayTextWhenHovered(hoveredEl, mode, molecule, textBoxEl) {
     if (!hoveredEl || typeof hoveredEl.x !== "number" || isNaN(hoveredEl.x)) {
-        console.warn("Invalid hovered object or hovered.x:", hoveredEl);
+        console.error("Invalid hovered object or hovered.x:", hoveredEl);
         return;
     }
     if (!textBoxEl) {
@@ -474,9 +475,10 @@ async function displayTextWhenHovered(hoveredEl, mode, molecule, textBoxEl) {
     const dataJSON = await getSpectraJSON(molecule);
     const peaks = dataJSON?.spectra_info?.[mode]?.peaks || [];
 
-    const peak = peaks.find(p => p.x === hoveredEl.x);
-    if (peak) {
-        textBoxEl.innerText = peak.description;
+    for(let i = 0; i < peaks.length; i += 1)  {
+        if (hoveredEl.x == peaks[i].x) { 
+            textBoxEl.innerText = peaks[i].description;
+        }
     }
 }
 
