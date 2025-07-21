@@ -339,7 +339,7 @@ function makeDeletable(element) {
     });
 }
 
-async function setUpCanvas(path='', molCanvasId, specCanvasId, molWidth, molHeight, specWidth, specHeight) {
+async function setUpCanvas(path='', molCanvasId, specCanvasId, molWidthPercent, molHeightPercent, specWidthPercent, specHeightPercent) {
     removeCanvas(molCanvasId)
     removeCanvas(specCanvasId)
 
@@ -348,26 +348,32 @@ async function setUpCanvas(path='', molCanvasId, specCanvasId, molWidth, molHeig
     let canvas = new ChemDoodle.io.JCAMPInterpreter().makeStructureSpectrumSet(
         'sample', 
         data, 
-        percentage("#" + molCanvasId, molWidth, "width"), 
-        percentage("#" + molCanvasId, molHeight, "height"), 
-        percentage("#" + specCanvasId, specWidth, "width"), 
-        percentage("#" + specCanvasId, specHeight, "height"),
+        percentage("#" + molCanvasId, molWidthPercent, "width"), 
+        percentage("#" + molCanvasId, molHeightPercent, "height"), 
+        percentage("#" + specCanvasId, specWidthPercent, "width"), 
+        percentage("#" + specCanvasId, specHeightPercent, "height"),
     )
 
     console.log(canvas);
     return canvas;
 }
 
-window.addEventListener('resize', function() {
-    canvases = setUpCanvas(
-        'data/spectra/' + viewingMode + '/' + displayingMol + viewingMode + '.jdx',
-        MOL_CANVAS_ID,
-        SPEC_CANVAS_ID,
-        MOL_CANVAS_WIDTH,
-        MOL_CANVAS_HEIGHT,
-        SPEC_CANVAS_WIDTH,
-        SPEC_CANVAS_HEIGHT
-    )
+let resizeTimeout;
+
+window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+
+    resizeTimeout = setTimeout(async () => {
+        canvases = await setUpCanvas(
+            'data/spectra/' + viewingMode + '/' + displayingMol + viewingMode + '.jdx',
+            MOL_CANVAS_ID,
+            SPEC_CANVAS_ID,
+            MOL_CANVAS_WIDTH,
+            MOL_CANVAS_HEIGHT,
+            SPEC_CANVAS_WIDTH,
+            SPEC_CANVAS_HEIGHT
+        );
+    }, 30);
 });
 
 function removeCanvas(canvasId) {
