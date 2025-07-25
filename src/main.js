@@ -183,6 +183,7 @@ async function mergeImages(selected1, selected2, canvasSelector="#frag-canvas") 
     "<svg",
     `<svg id="merged-svg" style="width: 30%" data-smiles="${mergedString}"`
     );
+    // makeDeletable(clonedFrag)
     canvas.innerHTML += mergedSvg;
 
 }
@@ -216,14 +217,22 @@ async function removeOneBond(SMILEStr, position) {
               firstTwo === "BrC" ||
               firstTwo === "ClC" ||
               firstFour === "[H]C" ||
+              firstFour === "N(C)" ||
               firstTwo === "OC"
             )
           ) {
-            newSmiles = SMILEStr.slice(0, -1); // remove last character (typically 'C')
-            console.log("case 1");
-            return newSmiles;
+            if (firstFour === "N(C)") {
+                newSmiles = SMILEStr.slice(0, -3); 
+                console.log("case 1.1");
+                return newSmiles;
+            }
+            else {
+                newSmiles = SMILEStr.slice(0, -1);
+                console.log("case 1.2");
+                return newSmiles;
+            }
           }
-           else if (SMILEStr[0].toUpperCase() === "C" && SMILEStr[1].toUpperCase() === "C") {
+           else if (SMILEStr[0].toUpperCase() === "C" && SMILEStr[1].toUpperCase() === "C" || SMILEStr === "CN(C)C" || SMILEStr === "COC") {
               console.log("case 3")
               newSmiles = SMILEStr.slice(1);
               return newSmiles;
@@ -242,16 +251,15 @@ async function removeOneBond(SMILEStr, position) {
               } else {
                   if (SMILEStr[1] === "l") {
                     console.log("subcase 1")
-                    console.log("case 4")
                     element = SMILEStr.slice(0, 2);
                     SMILEStr = SMILEStr.slice(2); 
 
                     adjustment = 2;
                   } else {
-                    console.log("subcase 2")
-                      element = SMILEStr.slice(0, 1);
-                      SMILEStr = SMILEStr.slice(1);
-                      adjustment = 1;
+                        console.log("subcase 2")
+                        element = SMILEStr.slice(0, 1);
+                        SMILEStr = SMILEStr.slice(1);
+                        adjustment = 1;
                   }
               }
               
