@@ -37,7 +37,7 @@ displayGeneralText(displayingMol)
 /// WINDOW BEHAVIORS///
 ///////////////////////
 
-document.querySelector(".frag-table-button").addEventListener("click", function() {
+document.querySelector(".frag-table-button").addEventListener("click", function(event) {
     event.stopPropagation()
     displayOrHideElement(".frag-table-button", ".frag-table", true, "Fragment Table");
 });
@@ -72,271 +72,365 @@ document.querySelectorAll(".nav-bar-section").forEach(button => {
     });
 })
 
-let editMode = false;
-
-function loadFragmentTable() {
-    let fragTable = document.querySelector(".frag-table")
-    for (let i = 0; i < 9; i++) {
-        fetch(`data/frag-library/frag${i}.svg`)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error("Failed to load: " + response.status);
-            }
-            return response.text(); 
-        })
-        .then(svgText => {
-            const parser = new DOMParser();
-            const svgDoc = parser.parseFromString(svgText, "image/svg+xml").documentElement;
-            
-            svgDoc.addEventListener('mouseover', function() {
-                this.style.cursor = 'pointer';
-            })
-
-            displayFragIntoCanvas(svgDoc)
-            
-            fragTable.appendChild(svgDoc);
-        })
-        .catch(error => {
-            console.error("Error loading file: frag" + i + ".svg", error);
+// Only the Fragment Space uses this editor. Spectrum/answer canvases stay independent.
+let RDKitLoader;
+function loadRDKit() {
+    if (!RDKitLoader) {
+        RDKitLoader = window.initRDKitModule().catch(error => {
+            RDKitLoader = null;
+            throw error;
         });
     }
+    return RDKitLoader;
 }
 
-loadFragmentTable()
+// * marks the open ends shown by the existing SVGs; these are not carbon atoms.
+// Keep the same nine fragments for every exercise.
+const FRAGMENT_TEMPLATES = [
+    { name: "Carbon", smiles: "*C(*)(*)*" },
+    { name: "Oxygen", smiles: "*O*" },
+    { name: "Hydrogen", smiles: "[H]*" },
+    { name: "Chlorine", smiles: "Cl*" },
+    { name: "Bromine", smiles: "Br*" },
+    { name: "Carbonyl", smiles: "*C(*)=O" },
+    { name: "Nitrogen", smiles: "*N(*)*" },
+    { name: "Alkene", smiles: "*C(*)=C(*)*" },
+    { name: "Benzene", smiles: "*C1=C(*)C(*)=C(*)C(*)=C1*" }
+];
 
-
-function displayFragIntoCanvas(frag) {
-    frag.addEventListener("click", function() {
-        let fragCanvas = document.querySelector('#frag-canvas');
-        let clonedFrag = this.cloneNode(true); 
-        clonedFrag.classList.add('frag-canvas-items');
-        makeDeletable(clonedFrag)
-        fragCanvas.appendChild(clonedFrag);
+async function createFragmentWorkspace() {
+    const host = document.querySelector("#frag-canvas");
+    const element = document.querySelector("#fragment-editor");
+    const status = document.querySelector("#fragment-status");
+    const deleteButton = document.querySelector("#del-frag-button");
+    const undoButton = document.querySelector("#undo-frag-button");
+    const clearButton = document.querySelector("#clear-frag-button");
+    const table = document.querySelector(".frag-table");
+    const hint = "Drag a structure to move it. Click two blue ends to connect them.";
+    const editor = new ChemDoodle.SketcherCanvas(element.id, Math.max(200, host.clientWidth), 240, {
+        includeToolbar: false, useServices: false, oneMolecule: false,
+        requireStartingAtom: false, resizable: false
     });
-}
-
-document.querySelector("#del-frag-button").addEventListener("click", function() {
-    editMode = toggleMode(editMode);
-    displayOrHideElement("#del-frag-button", ".overlay", true, "Frag Edit Mode")
-})
-
-    // Wait for RDKit to finish loading
-let RDKitLoader = null;
-
-function loadRDKit() {
-  if (!RDKitLoader) {
-    RDKitLoader = window.initRDKitModule()
-      .then((RDKit) => {
-        console.log("RDKit version: " + RDKit.version());
-        return RDKit;
-      })
-      .catch((err) => {
-        console.error("Failed to load RDKit module.", err);
-        throw err;
-      });
-  }
-  return RDKitLoader;
-}
-
-async function useRDKit() {
-    let RDKit = await loadRDKit();
-    const mol = RDKit.get_mol("ClC");
-    console.log(mol.get_smiles());
-}
-
-useRDKit();
-
-handleSvgPairSelection(mergeImages)
-
-async function mergeSmiles(smile1, smile2) {
-    const response = await fetch("https://smilesmerger.onrender.com/combine_smile", {
-    method: "POST",
-    headers: {
-        "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-        smile1: smile1,
-        smile2: smile2
-    })
-    });
-    const data = await response.json(); 
-    return data.combined_smile;         
-}
-
-async function mergeImages(selected1, selected2, canvasSelector="#frag-canvas") {
-    let RDKit = await loadRDKit()
-    const svgString1 = decodeURIComponent(selected1.dataset.smiles);
-    const svgString2Unprocessed = decodeURIComponent(selected2.dataset.smiles);
-    let canvas = document.querySelector(canvasSelector)
-
-    let svgString2 = await removeOneBond(svgString2Unprocessed);
-    let mergedString = await mergeSmiles(svgString1, svgString2);
-
-    console.log(mergedString)
-
-    selected1.remove();
-    selected2.remove();
-
-    /// need a cache for undo and if new smile string is = to cached smile string =>  do nothing
-    const mergedMol = RDKit.get_mol(mergedString);
-    const mergedSvg = mergedMol.get_svg().replace(
-    "<svg",
-    `<svg id="merged-svg" style="width: 30%" data-smiles="${mergedString}"`
-    );
-    // makeDeletable(clonedFrag)
-    canvas.innerHTML += mergedSvg;
-
-}
-
-async function removeOneBond(SMILEStr, position) {
-    let RDKit = await loadRDKit()
-    console.log("secondary string: " + SMILEStr)
-          /// convert SMILEstr into molblock
-          let mol = RDKit.get_mol(SMILEStr);
-          let molblock = mol.get_molblock()
-          let emptyBonds = getEmptyBondIndex(molblock)
-          console.log("selected2 emptyBonds: " + emptyBonds)
-
-          let emptyBondIndex = emptyBonds[Math.floor(Math.random() * emptyBonds.length)]
-          console.log("selected2 emptyBondIndex: " + emptyBondIndex)
-
-          let spliceIndex = molblockIndexToSmilePos(emptyBondIndex, SMILEStr)
-          console.log("selected2 spliceIndex: " + spliceIndex)
-
-          console.log("Secondary molblock: " + molblock)
-          console.log("Secondary mol empty bond: " + emptyBonds)
-          /// get emptyIndex
-          let newSmiles;
-          
-          const firstTwo = SMILEStr.slice(0, 2);
-          const firstThree = SMILEStr.slice(0, 3);
-          const firstFour = SMILEStr.slice(0, 4);
-
-          if (
-            SMILEStr.length <= 5 && (
-              firstTwo === "BrC" ||
-              firstTwo === "ClC" ||
-              firstFour === "[H]C" ||
-              firstFour === "N(C)" ||
-              firstTwo === "OC"
-            )
-          ) {
-            if (firstFour === "N(C)") {
-                newSmiles = SMILEStr.slice(0, -3); 
-                console.log("case 1.1");
-                return newSmiles;
+    editor.hideHelp = true;
+    editor.styles.backgroundColor = "aliceblue";
+    editor.styles.atoms_displayTerminalCarbonLabels_2D = false;
+    editor.styles.bondLength_2D = 28;
+    // This exercise exposes fragment operations only, including for keyboard/touch.
+    for (const event of ["click", "dblclick", "mousedown", "mousemove", "mouseup",
+        "mouseover", "mouseout", "rightclick", "rightmousedown", "rightmouseup",
+        "drag", "mousewheel", "keydown", "keypress", "keyup", "touchstart",
+        "touchmove", "touchend", "gesturechange", "gestureend"]) {
+        editor[event] = () => {};
+    }
+    let fragments = [], connections = [], history = [], selected = null;
+    let pendingPort = null, gesture = null, nextId = 1, deleteMode = false;
+    let renderedAtoms = [];
+    const snapshot = () => JSON.stringify({ fragments, connections, nextId });
+    function remember(before = snapshot()) {
+        history.push(before);
+        if (history.length > 100) history.shift();
+    }
+    function announce(message = hint) { status.textContent = message; }
+    function buildGraph() {
+        const graph = new ChemDoodle.structures.Molecule();
+        const atoms = new Map();
+        const used = new Set(connections.flatMap(link => [link.a, link.b]));
+        for (const fragment of fragments) {
+            fragment.atoms.forEach((data, index) => {
+                const key = fragment.id + ":" + index;
+                if (used.has(key)) return;
+                const atom = new ChemDoodle.structures.Atom(data.label, data.x, data.y);
+                atom.fragmentId = fragment.id;
+                atom.portKey = data.label === "*" ? key : null;
+                atoms.set(key, atom);
+                graph.atoms.push(atom);
+            });
+            for (const bond of fragment.bonds) {
+                const a = atoms.get(fragment.id + ":" + bond.a);
+                const b = atoms.get(fragment.id + ":" + bond.b);
+                if (a && b) graph.bonds.push(new ChemDoodle.structures.Bond(a, b, bond.order));
             }
-            else {
-                newSmiles = SMILEStr.slice(0, -1);
-                console.log("case 1.2");
-                return newSmiles;
-            }
-          }
-           else if (SMILEStr[0].toUpperCase() === "C" && SMILEStr[1].toUpperCase() === "C" || SMILEStr === "CN(C)C" || SMILEStr === "COC") {
-              console.log("case 3")
-              newSmiles = SMILEStr.slice(1);
-              return newSmiles;
-            }
-            /// else (not empty first bond):
-            else {
-              /// move first to an empty bond using emptyIndex by count to the emptyIndex C
-              console.log("case 4")
-              let element;
-              let adjustment;
-
-              if (SMILEStr[0].toUpperCase() !== "C") {
-                  element = SMILEStr.slice(0,2);
-                  SMILEStr = SMILEStr.slice(2); 
-                  adjustment = 2;
-              } else {
-                  if (SMILEStr[1] === "l") {
-                    console.log("subcase 1")
-                    element = SMILEStr.slice(0, 2);
-                    SMILEStr = SMILEStr.slice(2); 
-
-                    adjustment = 2;
-                  } else {
-                        console.log("subcase 2")
-                        element = SMILEStr.slice(0, 1);
-                        SMILEStr = SMILEStr.slice(1);
-                        adjustment = 1;
-                  }
-              }
-              
-              SMILEStr = SMILEStr.slice(0, spliceIndex-adjustment) + element + SMILEStr.slice(spliceIndex-(adjustment-1)); /// Problem: C(Cl)C(C)CCl
-              console.log(element)
-              console.log("Processed SMILE str: " + SMILEStr);
-              return SMILEStr;
-            }
-}
-
-function getFirstCommonElement(arrA, arrB) {
-          const setB = new Set(arrB); 
-          console.log("setA: " + arrA)
-          console.log("setB: " + arrB)
-          for (const elem of arrA) {
-              if (setB.has(elem)) {
-                  return elem; 
-              }
-          }
-          return null; 
         }
-
-        function molblockIndexToSmilePos(molblockIndex, smile) {
-          let atomCount = 1;   
-          let smilePos = 0; 
-          const twoLetterAtoms = ["Cl", "Br"]; // Add any others you want here
-
-          console.log("smile: " + smile);
-
-          for (let i = 0; i < smile.length; i++) {
-              const char = smile[i];
-              const nextChar = smile[i + 1];
-
-              // Check for two-letter atom (e.g., Cl, Br)
-              if (
-                  nextChar && 
-                  twoLetterAtoms.includes(char + nextChar)
-              ) {
-                  // Found two-letter atom like "Cl"
-                  if (atomCount === molblockIndex) {
-                      console.log("Found at atom count:", atomCount, "Two-letter atom:", char + nextChar, "SmilePos:", smilePos);
-                      return smilePos;
-                  }
-                  atomCount += 1;
-                  smilePos += 2; // skip both letters
-                  i+=1;           // skip nextChar in loop
-                  continue;
-              }
-
-              // Check for single-letter atom
-              if (/[A-Za-z]/.test(char)) {
-                  if (atomCount === molblockIndex) {
-                      console.log("Found at atom count:", atomCount, "Char:", char, "SmilePos:", smilePos);
-                      return smilePos;
-                  }
-                  atomCount += 1;
-              }
-
-              smilePos += 1;
-          }
-
-          console.warn("molblockIndex not found in SMILES");
-          return null;
-      }
-
-function toggleMode(currentMode) {
-    return !currentMode;
-}
-
-function makeDeletable(element) {
-    element.addEventListener('click', function() {
-        if (editMode) {
-            this.remove(); 
-            console.log('Element removed:', this);
+        function anchor(key) {
+            const [id, index] = key.split(":").map(Number);
+            const fragment = fragments.find(item => item.id === id);
+            const bond = fragment.bonds.find(item => item.a === index || item.b === index);
+            return atoms.get(id + ":" + (bond.a === index ? bond.b : bond.a));
         }
+        for (const link of connections) {
+            graph.bonds.push(new ChemDoodle.structures.Bond(anchor(link.a), anchor(link.b), 1));
+        }
+        return graph;
+    }
+    function render() {
+        const graph = buildGraph();
+        renderedAtoms = graph.atoms;
+        editor.molecules = new ChemDoodle.informatics.Splitter().split(graph);
+        editor.molecules.forEach(molecule => molecule.check());
+        editor.repaint();
+        undoButton.disabled = history.length === 0;
+        clearButton.disabled = fragments.length === 0;
+        deleteButton.disabled = fragments.length === 0;
+        deleteButton.setAttribute("aria-pressed", String(deleteMode));
+    }
+    const originalExtras = editor.drawChildExtras;
+    editor.drawChildExtras = function(ctx, styles) {
+        originalExtras.call(this, ctx, styles);
+        for (const atom of renderedAtoms) {
+            if (!atom.portKey && atom.fragmentId !== selected) continue;
+            ctx.beginPath();
+            ctx.arc(atom.x, atom.y, atom.portKey ? 7 : 5, 0, Math.PI * 2);
+            ctx.strokeStyle = atom.portKey === pendingPort ? "#dc7800" : atom.portKey ? "#2563eb" : "#7d8b9d";
+            ctx.lineWidth = atom.portKey === pendingPort ? 3 : 1.5;
+            ctx.stroke();
+        }
+        if (gesture && gesture.port && gesture.point) {
+            const start = renderedAtoms.find(atom => atom.portKey === gesture.port);
+            if (start) {
+                ctx.beginPath();
+                ctx.setLineDash([4, 4]);
+                ctx.moveTo(start.x, start.y);
+                ctx.lineTo(gesture.point.x, gesture.point.y);
+                ctx.strokeStyle = "#2563eb";
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        }
+    };
+    function connectedIds(id) {
+        const ids = new Set([id]);
+        let changed = true;
+        while (changed) {
+            changed = false;
+            for (const link of connections) {
+                const a = Number(link.a.split(":")[0]), b = Number(link.b.split(":")[0]);
+                if (ids.has(a) !== ids.has(b)) { ids.add(a); ids.add(b); changed = true; }
+            }
+        }
+        return ids;
+    }
+    function removeFragment(id) {
+        remember();
+        fragments = fragments.filter(fragment => fragment.id !== id);
+        connections = connections.filter(link => ![link.a, link.b].some(key => key.startsWith(id + ":")));
+        selected = pendingPort = null;
+        if (!fragments.length) deleteMode = false;
+        render();
+        announce("Fragment deleted. Undo restores it and its connections.");
+    }
+    const RDKit = await loadRDKit();
+    function connect(a, b) {
+        if (a === b) { pendingPort = null; render(); return; }
+        const before = snapshot();
+        // Align the second connected structure to the chosen open end.
+        // Keep a normal bond length instead of drawing across the whole canvas.
+        const [aId, aIndex] = a.split(":").map(Number);
+        const [bId, bIndex] = b.split(":").map(Number);
+        const first = fragments.find(fragment => fragment.id === aId);
+        const second = fragments.find(fragment => fragment.id === bId);
+        function portAnchor(fragment, index) {
+            const bond = fragment.bonds.find(item => item.a === index || item.b === index);
+            return fragment.atoms[bond.a === index ? bond.b : bond.a];
+        }
+        if (!connectedIds(aId).has(bId)) {
+            const anchorA = portAnchor(first, aIndex), anchorB = portAnchor(second, bIndex);
+            const portA = first.atoms[aIndex], portB = second.atoms[bIndex];
+            const angleA = Math.atan2(portA.y-anchorA.y, portA.x-anchorA.x);
+            const angleB = Math.atan2(portB.y-anchorB.y, portB.x-anchorB.x);
+            const rotation = angleA + Math.PI - angleB;
+            const origin = { x: anchorB.x, y: anchorB.y };
+            const target = { x: anchorA.x + 28*Math.cos(angleA), y: anchorA.y + 28*Math.sin(angleA) };
+            const moving = connectedIds(bId);
+            for (const fragment of fragments) if (moving.has(fragment.id)) {
+                for (const atom of fragment.atoms) {
+                    const x = atom.x-origin.x, y = atom.y-origin.y;
+                    atom.x = target.x + x*Math.cos(rotation) - y*Math.sin(rotation);
+                    atom.y = target.y + x*Math.sin(rotation) + y*Math.cos(rotation);
+                }
+            }
+        }
+        connections.push({ a, b });
+        let molecule;
+        try {
+            const graph = buildGraph();
+            if (graph.bonds.some(bond => bond.a1 === bond.a2)) throw new Error("Choose ends on different atoms.");
+            const pairs = new Set();
+            for (const bond of graph.bonds) {
+                const key = [graph.atoms.indexOf(bond.a1), graph.atoms.indexOf(bond.a2)].sort((x,y) => x-y).join(":");
+                if (pairs.has(key)) throw new Error("Those atoms are already connected.");
+                pairs.add(key);
+            }
+            molecule = RDKit.get_mol(ChemDoodle.writeMOL(graph), JSON.stringify({ removeHs: false }));
+            if (!molecule || !molecule.is_valid()) throw new Error("These ends cannot form a valid bond.");
+            remember(before);
+            announce("Connected. Remaining blue ends can accept more fragments.");
+        } catch (error) {
+            const previous = JSON.parse(before);
+            fragments = previous.fragments;
+            connections = previous.connections;
+            announce(error.message || "Could not connect these fragments.");
+        } finally {
+            molecule?.delete();
+            pendingPort = null;
+            render();
+        }
+    }
+    function point(event) {
+        const rect = element.getBoundingClientRect();
+        return { x: (event.clientX - rect.left) * editor.width / rect.width,
+            y: (event.clientY - rect.top) * editor.height / rect.height };
+    }
+    function hit(p) {
+        let closest = null, distance = 15;
+        for (const atom of renderedAtoms) {
+            const d = Math.hypot(atom.x - p.x, atom.y - p.y);
+            if (d < distance) { closest = atom; distance = d; }
+        }
+        if (closest) return closest;
+        for (const molecule of editor.molecules) {
+            for (const bond of molecule.bonds) {
+                const dx = bond.a2.x - bond.a1.x, dy = bond.a2.y - bond.a1.y;
+                const t = Math.max(0, Math.min(1, ((p.x-bond.a1.x)*dx+(p.y-bond.a1.y)*dy)/(dx*dx+dy*dy || 1)));
+                if (Math.hypot(p.x-bond.a1.x-t*dx, p.y-bond.a1.y-t*dy) < 8) {
+                    return { fragmentId: bond.a1.fragmentId, portKey: null };
+                }
+            }
+        }
+        return null;
+    }
+    element.addEventListener("pointerdown", event => {
+        if (event.button !== 0 || gesture) return;
+        event.preventDefault();
+        element.focus();
+        const p = point(event), target = hit(p);
+        if (!target) { selected = pendingPort = null; render(); return; }
+        if (deleteMode) { removeFragment(target.fragmentId); return; }
+        selected = target.fragmentId;
+        gesture = { pointerId: event.pointerId, start: p, last: p, point: p,
+            port: target.portKey, ids: connectedIds(selected), before: snapshot(), moved: false };
+        element.setPointerCapture(event.pointerId);
+        render();
     });
+    element.addEventListener("pointermove", event => {
+        if (!gesture || event.pointerId !== gesture.pointerId) return;
+        const p = point(event);
+        if (Math.hypot(p.x-gesture.start.x, p.y-gesture.start.y) > 4) gesture.moved = true;
+        if (gesture.moved && !gesture.port) {
+            for (const fragment of fragments) if (gesture.ids.has(fragment.id)) {
+                for (const atom of fragment.atoms) { atom.x += p.x-gesture.last.x; atom.y += p.y-gesture.last.y; }
+            }
+        }
+        gesture.last = gesture.point = p;
+        render();
+    });
+    function release(event, cancelled = false) {
+        if (!gesture || event.pointerId !== gesture.pointerId) return;
+        const current = gesture;
+        gesture = null;
+        if (element.hasPointerCapture(event.pointerId)) element.releasePointerCapture(event.pointerId);
+        if (cancelled) {
+            const previous = JSON.parse(current.before);
+            fragments = previous.fragments; connections = previous.connections;
+            pendingPort = null;
+        } else if (current.port) {
+            const target = hit(point(event));
+            if (current.moved) {
+                if (target?.portKey && target.portKey !== current.port) connect(current.port, target.portKey);
+                else announce("Drop on another blue end to connect.");
+            } else if (pendingPort) connect(pendingPort, current.port);
+            else { pendingPort = current.port; announce("Now click another blue end. Escape cancels."); }
+        } else if (current.moved) { remember(current.before); pendingPort = null; }
+        render();
+    }
+    element.addEventListener("pointerup", event => release(event));
+    element.addEventListener("pointercancel", event => release(event, true));
+    function undo() {
+        if (!history.length || gesture) return;
+        const previous = JSON.parse(history.pop());
+        fragments = previous.fragments; connections = previous.connections; nextId = previous.nextId;
+        selected = pendingPort = null; deleteMode = false;
+        render(); announce("Undone.");
+    }
+    deleteButton.addEventListener("click", () => {
+        if (selected !== null) { removeFragment(selected); return; }
+        deleteMode = !deleteMode; pendingPort = null;
+        render(); announce(deleteMode ? "Click a fragment to delete it." : hint);
+    });
+    undoButton.addEventListener("click", undo);
+    clearButton.addEventListener("click", () => {
+        if (!fragments.length) return;
+        remember(); fragments = []; connections = [];
+        selected = pendingPort = null; deleteMode = false;
+        render(); announce("Canvas cleared. Undo restores your work.");
+    });
+    element.addEventListener("keydown", event => {
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+            event.preventDefault(); undo();
+        } else if (event.key === "Delete" || event.key === "Backspace") {
+            event.preventDefault();
+            if (selected !== null) removeFragment(selected);
+        } else if (event.key === "Escape") {
+            pendingPort = selected = null; deleteMode = false; render(); announce();
+        }
+        event.stopPropagation();
+    });
+    const templates = await Promise.all(FRAGMENT_TEMPLATES.map(async (definition, index) => {
+        const svgText = await getData("data/frag-library/frag" + index + ".svg");
+        const svg = new DOMParser().parseFromString(svgText, "image/svg+xml").documentElement;
+        if (svg.localName !== "svg") throw new Error("Invalid fragment SVG.");
+        let molecule;
+        try {
+            molecule = RDKit.get_mol(definition.smiles, JSON.stringify({ removeHs: false }));
+            if (!molecule) throw new Error("Invalid fragment structure.");
+            const model = ChemDoodle.readMOL(molecule.get_molblock());
+            // ChemDoodle imports MOL wildcard atoms as R.
+            model.atoms.forEach(atom => { if (atom.label === "R") atom.label = "*"; });
+            model.scaleToAverageBondLength(28);
+            return { svg, model, name: definition.name };
+        } finally { molecule?.delete(); }
+    }));
+    for (const { svg, model, name } of templates) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "fragment-choice";
+        button.title = "Add " + name.toLowerCase() + " fragment";
+        button.setAttribute("aria-label", button.title);
+        button.appendChild(document.importNode(svg, true));
+        button.addEventListener("click", () => {
+            remember();
+            const center = model.getCenter();
+            const slot = fragments.length % 6;
+            const x = editor.width * (0.28 + (slot % 2) * 0.44);
+            const y = 60 + Math.floor(slot / 2) * Math.max(20, (editor.height - 120) / 2);
+            fragments.push({ id: nextId++, atoms: model.atoms.map(atom => ({
+                label: atom.label, x: atom.x-center.x+x, y: atom.y-center.y+y
+            })), bonds: model.bonds.map(bond => ({
+                a: model.atoms.indexOf(bond.a1), b: model.atoms.indexOf(bond.a2), order: bond.bondOrder
+            })) });
+            selected = nextId-1; pendingPort = null; deleteMode = false;
+            render(); announce(); element.focus();
+        });
+        table.appendChild(button);
+    }
+    function resize() {
+        const width = Math.max(100, host.clientWidth);
+        const section = host.closest(".user-section");
+        const height = Math.max(160, section.clientHeight -
+            section.querySelector(".u-s-header").offsetHeight -
+            section.querySelector(".fragment-controls").offsetHeight - status.offsetHeight - 12);
+        if (width !== editor.width || height !== editor.height) editor.resize(width, height);
+        render();
+    }
+    new ResizeObserver(resize).observe(host);
+    new ResizeObserver(resize).observe(host.closest(".user-section"));
+    resize(); announce();
 }
+
+createFragmentWorkspace().catch(error => {
+    console.error("Fragment workspace failed to load:", error);
+    document.querySelector("#fragment-status").textContent =
+        "Could not load the fragment editor. Reload the page to try again.";
+});
 
 async function setUpCanvas(path='', molCanvasId, specCanvasId, molWidthPercent, molHeightPercent, specWidthPercent, specHeightPercent) {
     removeCanvas(molCanvasId)

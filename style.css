@@ -422,3 +422,17 @@ svg {
     height: 30%;
     width: 30%;
 }
+
+/* Fragment workspace only; spectrum and answer molecule styles are unchanged. */
+#frag-canvas { width: 100%; min-height: 160px; }
+#fragment-editor { display: block; padding: 0; border: 0; touch-action: none; }
+#fragment-editor:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
+.fragment-controls { display: flex; gap: 6px; padding: 4px 8px; }
+.fragment-controls button { cursor: pointer; border: var(--border-setting); border-radius: 6px; padding: 4px 10px; }
+.fragment-controls #del-frag-button { width: auto; }
+.fragment-controls button[aria-pressed="true"] { background: #dbeafe; }
+.fragment-controls button:disabled { cursor: default; opacity: .5; }
+#fragment-status { color: #424b5a; font-size: 12px; line-height: 1.4; margin: 3px 8px 6px; }
+.frag-table .fragment-choice { display: inline-flex; justify-content: center; align-items: center; width: 29%; height: 72px; margin: 2%; padding: 4px; border: 1px solid transparent; border-radius: 6px; background: aliceblue; cursor: pointer; vertical-align: middle; }
+.frag-table .fragment-choice:hover, .frag-table .fragment-choice:focus-visible { border-color: #2563eb; background: #dbeafe; }
+.frag-table .fragment-choice svg { width: auto; height: auto; max-width: 90%; max-height: 60px; padding: 0; pointer-events: none; }

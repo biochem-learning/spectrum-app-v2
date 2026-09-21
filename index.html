@@ -36,10 +36,15 @@
                     <button class="frag-table-button">Open Fragment Table</button>
                 </div>
             </div>
-            <div id="frag-canvas"></div>
+            <div class="fragment-controls" role="toolbar" aria-label="Fragment controls">
+                <button type="button" id="del-frag-button" aria-pressed="false" disabled>Delete</button>
+                <button type="button" id="undo-frag-button" disabled>Undo</button>
+                <button type="button" id="clear-frag-button" disabled>Clear</button>
+            </div>
+            <div id="frag-canvas"><canvas id="fragment-editor" tabindex="0" aria-label="Fragment drawing canvas"></canvas></div>
+            <p id="fragment-status" role="status">Loading fragments…</p>
             <div class="frag-table">
                 <div class="f-t-general-instr">Click on a fragment to add it to the molecule's Fragment Space</div>
-                <button class="frag-table-items" id="del-frag-button">Open Frag Edit Mode</button>
             </div>
         </div>
         
