@@ -1,6 +1,7 @@
 # Interactive Spectroscopy Explorer
 
-!!! Warning: Update ChemDoodle library is NOT recommended: The current library has been modified 
+> [!WARNING]
+> This API is no longer used. JCAMP merging and peak detection for JCAMP-DX builder is now handled locally.Warning: Update ChemDoodle library is NOT recommended: The current library has been modified 
 
 An interactive spectroscopy learning tool for exploring MS, IR, HNMR, and CNMR spectra of selected organic compounds, viewing information and explanations for individual signals, highlighting the corresponding atoms and bonds in molecular structures, and practicing the assembly of corresponding structures in a fragment-based canvas.
 
