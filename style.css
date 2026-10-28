@@ -47,6 +47,7 @@ header, .nav-bar, .user-section, .info-section {
 
 /***Header***/
 header {
+    position: relative;
     height: 10%;
     font-weight: 800;
     font-size: 2em;
@@ -59,8 +60,31 @@ header {
     background-color: var(--header-color);
 }
 
+.header-logo {
+    position: absolute;
+    right: 0.5%;
+    top: 50%;
+    height: 48%;
+    padding: 3px 6px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    background-color: white;
+    border-radius: 6px;
+    transform: translateY(-50%);
+}
+
+.header-logo img {
+    width: auto;
+    height: 100%;
+    max-width: 22vw;
+    object-fit: contain;
+}
+
 .title {
     width: 100%;
+    padding: 0 20%;
+    box-sizing: border-box;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -423,7 +447,6 @@ svg {
     width: 30%;
 }
 
-/* Fragment workspace only; spectrum and answer molecule styles are unchanged. */
 #frag-canvas { width: 100%; min-height: 160px; }
 #fragment-editor { display: block; padding: 0; border: 0; touch-action: none; }
 #fragment-editor:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }

@@ -9,7 +9,6 @@ const MOL_CANVAS_ID = "sample_molecule";
 const SPEC_CANVAS_ID = "sample_spectrum";
 
 const SPEC_DESCRIPTION_TEXTBOX =  document.querySelector(".spec-desc"); 
-
 let displayingMol = "Ethanol"
 let viewingMode = "MS"
 
@@ -72,7 +71,6 @@ document.querySelectorAll(".nav-bar-section").forEach(button => {
     });
 })
 
-// Only the Fragment Space uses this editor. Spectrum/answer canvases stay independent.
 let RDKitLoader;
 function loadRDKit() {
     if (!RDKitLoader) {
@@ -84,8 +82,6 @@ function loadRDKit() {
     return RDKitLoader;
 }
 
-// * marks the open ends shown by the existing SVGs; these are not carbon atoms.
-// Keep the same nine fragments for every exercise.
 const FRAGMENT_TEMPLATES = [
     { name: "Carbon", smiles: "*C(*)(*)*" },
     { name: "Oxygen", smiles: "*O*" },
@@ -115,7 +111,6 @@ async function createFragmentWorkspace() {
     editor.styles.backgroundColor = "aliceblue";
     editor.styles.atoms_displayTerminalCarbonLabels_2D = false;
     editor.styles.bondLength_2D = 28;
-    // This exercise exposes fragment operations only, including for keyboard/touch.
     for (const event of ["click", "dblclick", "mousedown", "mousemove", "mouseup",
         "mouseover", "mouseout", "rightclick", "rightmousedown", "rightmouseup",
         "drag", "mousewheel", "keydown", "keypress", "keyup", "touchstart",
@@ -222,8 +217,6 @@ async function createFragmentWorkspace() {
     function connect(a, b) {
         if (a === b) { pendingPort = null; render(); return; }
         const before = snapshot();
-        // Align the second connected structure to the chosen open end.
-        // Keep a normal bond length instead of drawing across the whole canvas.
         const [aId, aIndex] = a.split(":").map(Number);
         const [bId, bIndex] = b.split(":").map(Number);
         const first = fragments.find(fragment => fragment.id === aId);
@@ -383,7 +376,6 @@ async function createFragmentWorkspace() {
             molecule = RDKit.get_mol(definition.smiles, JSON.stringify({ removeHs: false }));
             if (!molecule) throw new Error("Invalid fragment structure.");
             const model = ChemDoodle.readMOL(molecule.get_molblock());
-            // ChemDoodle imports MOL wildcard atoms as R.
             model.atoms.forEach(atom => { if (atom.label === "R") atom.label = "*"; });
             model.scaleToAverageBondLength(28);
             return { svg, model, name: definition.name };
@@ -432,6 +424,127 @@ createFragmentWorkspace().catch(error => {
         "Could not load the fragment editor. Reload the page to try again.";
 });
 
+function enablePinnedSpectrumSelection(canvasPair) {
+    const moleculeCanvas = canvasPair[0];
+    const spectrumCanvas = canvasPair[1];
+    const molecule = moleculeCanvas.molecules[0];
+
+    if (!molecule || !spectrumCanvas.spectrum?.assignments) return;
+
+    let pinnedAssignment;
+    let pinnedDescription = "";
+
+    function clearAtomHighlights() {
+        molecule.atoms.forEach(atom => {
+            atom.isHover = false;
+        });
+    }
+
+    function showAssignment(assignment) {
+        clearAtomHighlights();
+        assignment.as.forEach(atom => {
+            atom.isHover = true;
+        });
+        spectrumCanvas.spectrum.hovered = assignment;
+        moleculeCanvas.repaint();
+        spectrumCanvas.repaint();
+    }
+
+    function preservePinnedSelection() {
+        if (!pinnedAssignment) return false;
+        showAssignment(pinnedAssignment);
+        SPEC_DESCRIPTION_TEXTBOX.innerText = pinnedDescription;
+        return true;
+    }
+
+    function distanceToBond(point, bond) {
+        const dx = bond.a2.x - bond.a1.x;
+        const dy = bond.a2.y - bond.a1.y;
+        const lengthSquared = dx * dx + dy * dy;
+        const amount = lengthSquared === 0 ? 0 : Math.max(0, Math.min(1,
+            ((point.x - bond.a1.x) * dx + (point.y - bond.a1.y) * dy) / lengthSquared));
+        const x = bond.a1.x + amount * dx;
+        const y = bond.a1.y + amount * dy;
+        return Math.hypot(point.x - x, point.y - y);
+    }
+
+    function findHighlightedBond(point, assignment) {
+        if (!assignment) return null;
+        return molecule.bonds.find(bond => assignment.as.includes(bond.a1) &&
+            assignment.as.includes(bond.a2) && distanceToBond(point, bond) <= 10) || null;
+    }
+
+    function releasePinnedSelection() {
+        pinnedAssignment = undefined;
+        pinnedDescription = "";
+        clearAtomHighlights();
+        spectrumCanvas.spectrum.hovered = undefined;
+        moleculeCanvas.repaint();
+        spectrumCanvas.repaint();
+        displayGeneralText(displayingMol, viewingMode);
+    }
+
+    async function pinAssignment(assignment) {
+        pinnedAssignment = assignment;
+        pinnedDescription = SPEC_DESCRIPTION_TEXTBOX.innerText;
+        showAssignment(pinnedAssignment);
+        const data = await getSpectraJSON(displayingMol);
+        const peak = data?.spectra_info?.[viewingMode]?.peaks?.find(item => item.x == assignment.x);
+        if (pinnedAssignment !== assignment) return;
+        pinnedDescription = peak?.description || pinnedDescription;
+        SPEC_DESCRIPTION_TEXTBOX.innerText = pinnedDescription;
+    }
+
+    const moleculeMousemove = moleculeCanvas.mousemove.bind(moleculeCanvas);
+    const moleculeMouseout = moleculeCanvas.mouseout.bind(moleculeCanvas);
+    const spectrumMousemove = spectrumCanvas.mousemove.bind(spectrumCanvas);
+    const spectrumMouseout = spectrumCanvas.mouseout.bind(spectrumCanvas);
+
+    moleculeCanvas.mousemove = function(event) {
+        if (!preservePinnedSelection()) moleculeMousemove(event);
+    };
+    moleculeCanvas.mouseout = function(event) {
+        if (!preservePinnedSelection()) moleculeMouseout(event);
+    };
+    spectrumCanvas.mousemove = function(event) {
+        if (!preservePinnedSelection()) spectrumMousemove(event);
+    };
+    spectrumCanvas.mouseout = function(event) {
+        if (!preservePinnedSelection()) spectrumMouseout(event);
+    };
+    moleculeCanvas.touchmove = moleculeCanvas.mousemove;
+    moleculeCanvas.touchend = moleculeCanvas.mouseout;
+    spectrumCanvas.touchmove = spectrumCanvas.mousemove;
+    spectrumCanvas.touchend = spectrumCanvas.mouseout;
+
+    moleculeCanvas.click = function(event) {
+        if (pinnedAssignment) {
+            releasePinnedSelection();
+            return;
+        }
+
+        const assignment = spectrumCanvas.spectrum.hovered;
+        if (!findHighlightedBond(event.p, assignment)) return;
+
+        pinAssignment(assignment);
+    };
+
+    spectrumCanvas.click = function(event) {
+        if (pinnedAssignment) {
+            releasePinnedSelection();
+            return;
+        }
+
+        const assignment = spectrumCanvas.spectrum.hovered;
+        if (!assignment) return;
+        const peakX = spectrumCanvas.spectrum.getTransformedX(assignment.x, spectrumCanvas.styles,
+            spectrumCanvas.spectrum.memory.width, spectrumCanvas.spectrum.memory.offsetLeft);
+        if (Math.abs(peakX - event.p.x) > 20) return;
+
+        pinAssignment(assignment);
+    };
+}
+
 async function setUpCanvas(path='', molCanvasId, specCanvasId, molWidthPercent, molHeightPercent, specWidthPercent, specHeightPercent) {
     removeCanvas(molCanvasId)
     removeCanvas(specCanvasId)
@@ -447,6 +560,7 @@ async function setUpCanvas(path='', molCanvasId, specCanvasId, molWidthPercent, 
         percentage("#" + specCanvasId, specHeightPercent, "height"),
     )
 
+    enablePinnedSpectrumSelection(canvas);
     console.log(canvas);
     return canvas;
 }
